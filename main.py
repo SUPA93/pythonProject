@@ -1,54 +1,56 @@
 from instagrapi import Client
 
-try:
-    with open("bots.txt", "r") as f:
-        username, password = f.read().splitlines()
-except Exception as e:
-    print(f"Erreur de lecture txt: (e)")
-    exit()
-
+# Configuration initiale et connexion
 client = Client()
-try:
-    client.login(username, password)
-except Exception as e:
-    print(f"Erreur de connection: (e)")
+with open("bots.txt", "r") as f:
+    username, password = f.read().splitlines()
+client.login(username, password)
 
+# Saisie et traitement de l'input utilisateur
 input_value = input("Entrez l'URL ou le nom d'utilisateur Instagram : ")
 username = input_value.replace('https://www.instagram.com/', '').strip('/')
-# version de chat jépété
-# username = input_value.split('instagram.com/')[-1].strip('/').split('?')[0]
+user_info = client.user_info_by_username(username)
+user_id = user_info.pk
 
-try:
-    user_info = client.user_info_by_username(username)
-    user_id = user_info.pk
-except Exception as e:
-    print(f"Erreur lors de la récupération des infos user: (e)")
-    exit()
-# ici si tu veux le dernier post c'est 1 sinon tu peux mettre les 10 derniers avec 10 par ex
+# Récupération des posts 1 = dernier. 10 = les 10 ders
 posts = client.user_medias(user_id, amount=1)
 
-for post in posts:
-    print(f"ID de la publication: {post.pk},  Nombre de likes: {post.like_count}")
+# Vérifier s'il y a des posts
+if posts:
+    for post in posts:
+        caption = getattr(post, 'caption', 'Pas de légende disponible')
+        print(f"ID de la publication: {post.pk}, Légende: {caption}, Nombre de likes: {post.like_count}")
 
-    try:
-        # Pour liker une publication
-        client.media_like(post.pk)
-        print("Publication aimée avec succès.")
-    except Exception as e:
-        print(f"Erreur lors du like de la publication: {e}")
+        # Vérification si le post est déjà liké
+        if not client.media_info(post.pk).has_liked:
+            try:
+                client.media_like(post.pk)
+                print("Publication aimée avec succès.")
+            except Exception as e:
+                print(f"Erreur lors du like de la publication: {e}")
+        else:
+            print("Publication déjà aimée.")
 
-    try:
-        # Pour commenter une publication
-        client.media_comment(post.pk, "Super post !")
-        print("Commentaire ajouté avec succès.")
-    except Exception as e:
-        print(f"Erreur lors de l'ajout d'un commentaire: {e}")
+        # Vérification si le post est déjà commenté
+        already_commented = any(comment.text == "Super post !" for comment in client.media_comments(post.pk))
+        if not already_commented:
+            try:
+                client.media_comment(post.pk, "Super post !")
+                print("Commentaire ajouté avec succès.")
+            except Exception as e:
+                print(f"Erreur lors de l'ajout d'un commentaire: {e}")
+        else:
+            print("Commentaire 'Super post !' déjà ajouté.")
+else:
+    print("Aucun post disponible.")
 
+# Vérification si l'utilisateur est déjà suivi
+current_user_following = client.user_following(client.user_id_from_username(username))
+if user_id not in current_user_following:
     try:
-        # Pour s'abonner au profil
         client.user_follow(user_id)
         print("Abonnement au profil réussi.")
     except Exception as e:
         print(f"Erreur lors de l'abonnement au profil: {e}")
-
-print("Tout est OK")
+else:
+    print("Déjà abonné au profil.")
